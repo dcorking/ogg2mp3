@@ -2,32 +2,11 @@
 
 CMD=$( basename $0 )
 VERSION="0.1"
-USAGE="Usage: $CMD [-h] [-v] [-p preset] [-m mode] [-a bitrate | -v level ] inputfiles ..."
+USAGE="Usage: $CMD [-h] [-m mode] [-a bitrate | -v quality ] inputfiles ..."
 
 # ---------------------------------------------------------
-function print () {
-   C=$1
-   shift
-   for MSG in "$@"; do
-      echo >&$C "$MSG"
-   done
-}
-# ---------------------------------------------------------
-function verbose () {
-  test "$VERBOSE" && print 1 "$@"
-}
-# ---------------------------------------------------------
-function warn () {
-  print 2 "$@"
-}
-# ---------------------------------------------------------
-function fail () {
-  print 2 "$@"
-  exit 1
-}
-# ---------------------------------------------------------
 function printusage () {
-  test "$1" && echo >&2 "$CMD: $1\n"
+  test "$1" && echo -e >&2 "$CMD: $1"
   echo >&2 "$USAGE"
   exit 2
 }
@@ -42,32 +21,69 @@ $USAGE
 
 Options:
   -h, --help            Print help
-  -v. --verbose         Print verbose information.
-  -p, --preset=PRESET   Use preset PRESET for encoding.
-
+  -q, --quiet           Do not print verbose messages.
+  -m, --mode=MODE       Define stereo mode where MODE may be (j)oint,
+                        (s)imple, (f)orce, (d)dual-mono, (m)ono
+  -a, --abr=BITRATE     Use ABR encoding method with specified average
+                        bit rate. See LAME man page for details.
+  -v, --vbr=QUALITY     Use VBR encoding method with specified quality
+                        setting. See LAME man page for details.
 EOF
   exit 0
+}
+# ---------------------------------------------------------
+function print () {
+   C=$1
+   shift
+   for MSG in "$@"; do
+      echo >&$C "$MSG"
+   done
+}
+# ---------------------------------------------------------
+function verbose () {
+  [ "$QUIET" ] || print 1 "$@"
+}
+# ---------------------------------------------------------
+function warn () {
+  print 2 "$@"
+}
+# ---------------------------------------------------------
+function fail () {
+  print 2 "$@"
+  exit 1
 }
 
 # ---------------------------------------------------------
 # parse command line options
 # ---------------------------------------------------------
 
-OPTS=$( getopt -n $CMD -o h?p:v --long help,preset:,verbose -- "$@" )
+OPTS=$( getopt -n $CMD -o h?qm:a:v: --long help,mode:,abr:,vbr: -- "$@" )
 eval set -- $OPTS
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -h|-\?|--help)  printhelp;;
-    -v|--verbose)   VERBOSE="1";;
-    -p|--preset)    PRESET="$2"; shift;;
+    -q|--quiet)     QUIET="TRUE";;
+    -m|--mode)      MODE="$2"; shift;;
+    -a|--abr)       ABR="$2"; shift;;
+    -v|--vbr)       VBR="$2"; shift;;
     --)             shift; break;; # $@ is used below
     *)              printusage "Invalid option '$1'!";;
   esac
   shift
 done
 
-test "$1" || printusage "No input files defined!"
+[[ "$ABR" && "$VBR" ]] && printusage "Only either ABR or VBR is allowed!"
+[[ "$1" ]] || printusage "No input files defined!"
+[[ "$ABR" || "$VBR" ]] || AUTOABR="TRUE"
+
+# set encoding method
+test "$MODE" && MODE="-m ${MODE:0:1}"
+test "$ABR" && METHOD="--abr $ABR"
+test "$VBR" && METHOD="--vbr-new -V $VBR"
+
+verbose "mode option:    $MODE"
+verbose "method option:  $METHOD"
 
 # ---------------------------------------------------------
 # transcode 
@@ -82,11 +98,14 @@ function transcode () {
    # read ogginfo output
    OGGINFO=$( ogginfo "$1" )
    test "$?" != "0" && fail "ogginfo failed!" "$OGGINFO"
-
+ 
    # parse nominal bitrate
-   BITRATE=$( echo "$OGGINFO" | grep "Nominal bitrate:" | cut -d' ' -f3 )
-   test "$BITRATE" || fail "Unable to parse bitrate!"
-   verbose "Bitrate: $BITRATE"
+   if [ "$AUTOABR" ]; then
+      BITRATE=$( echo "$OGGINFO" | grep "Nominal bitrate:" | cut -d' ' -f3 )
+      test "$BITRATE" || fail "Unable to parse bitrate!"
+      verbose "Bitrate: $BITRATE"
+      METHOD=--abr $BITRATE
+   fi
 
    # parse tags
    ARTIST=$( parsetag "$OGGINFO" "artist" )
@@ -98,7 +117,7 @@ function transcode () {
    COMMENT=$( parsetag "$OGGINFO" "comment" )
    
    # decode | encode
-   oggdec -Q -o- "$1" | lame -S --silent -mj --abr $BITRATE -q7 \
+   oggdec -Q -o- "$1" | lame -S $MODE $METHOD -q7 \
       --ta "$ARTIST" --tt "$TITLE" --ta "$ALBUM" --ty "$YEAR" --tn "$TRACKNUMBER" --tg "$GENRE" -tc "$COMMENT" \
 	  - "${1/.ogg/.mp3}"
 }
@@ -107,9 +126,13 @@ function transcode () {
 #  process recursion
 # ---------------------------------------------------------
 
+function isogg () {
+   # grep will have an error exit status if nothing was matched
+   file "$1" | grep "Ogg data" | grep "Vorbis audio" > /dev/null
+}
+
 function processfile () {
-   FILE="$1"
-#   FOLDER=$( basename "$2" )
+   FILE="$@"
    
    # fail if invalid file
    test -r "$FILE" || fail "Unable to read file '$FILE'!"
@@ -117,21 +140,16 @@ function processfile () {
    # if directory, process content
    if [ -d "$FILE" ]; then
       verbose "Processing directory '$FILE' ..."
-#      pushd . > /dev/null
-#      cd "$FILE"
       for SUBFILE in "$FILE"/*; do
       
          processfile "$SUBFILE"
       done
-#      popd > /dev/null
+
+   # else: transcode file if ogg
    else
       verbose "Processing file '$FILE' ..."
-      # test if ogg file
-      ISOGG=$( file "$FILE" | grep "Ogg data" | grep "Vorbis audio" )
-      if [ "$ISOGG" ]; then 
-         # transcode this file
- #        transcode "$FILE"
-         echo .
+      if isogg "$FILE"; then 
+         transcode "$FILE"
       else
          warn "Not an Ogg Vorbis file: '$FILE'"
       fi
@@ -143,7 +161,7 @@ function processfile () {
 # ---------------------------------------------------------
 
 for FILE in "$@"; do
-   processfile $( basename "$FILE" )
+   processfile "$FILE"
 done
 
 
