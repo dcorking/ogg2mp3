@@ -2,7 +2,7 @@
 
 CMD=$( basename $0 )
 VERSION="0.2"
-USAGE="Usage: $CMD [-h] [-m mode] [-a bitrate | -v quality ] inputfiles ..."
+USAGE="Usage: $CMD [-h | OPTIONS ] inputfiles ..."
 
 # ---------------------------------------------------------
 function printusage () {
@@ -17,19 +17,23 @@ ogg2mp3 version $VERSION
 Bulk transcoding of OGG Vorbis to MP3. 
 
 (c) 2008 by Christoph Souris
-Released without warranty under the terms of the Artistic License.
+Released without warranty under the terms of the BSD license.
 
 $USAGE
 
 Options:
   -h, --help            Print help
-  -q, --quiet           Do not print verbose messages.
   -m, --mode=MODE       Define stereo mode where MODE may be (j)oint,
                         (s)imple, (f)orce, (d)dual-mono, (m)ono
   -a, --abr=BITRATE     Use ABR encoding method with specified average
                         bit rate. See LAME man page for details.
   -v, --vbr=QUALITY     Use VBR encoding method with specified quality
-                        setting. See LAME man page for details.
+                        setting. Default is 4, use 0 for high or 9 for
+                        low quality. See LAME man page for details.
+  -q, --quality=QUALITY Define LAME algorithm quality. Default is 5, use
+                        2 for high or 7 for reasonable low quality. See
+                        LAME page for details.
+      --verbose         Print verbose information.
 EOF
   exit 0
 }
@@ -45,6 +49,9 @@ function print () {
 function verbose () {
   [ "$QUIET" ] || print 1 "$@"
 }
+function printsetting () {
+  test "$2" && verbose "$1: $2"
+}
 # ---------------------------------------------------------
 function warn () {
   print 2 "$@"
@@ -59,14 +66,15 @@ function fail () {
 # parse command line options
 # ---------------------------------------------------------
 
-OPTS=$( getopt -n $CMD -o hqm:a:v: --long help,mode:,abr:,vbr: -- "$@" )
+OPTS=$( getopt -n $CMD -o hqm:a:v: --long help,verbose,mode:,quality:,abr:,vbr: -- "$@" )
 eval set -- $OPTS
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    -h|--help)  printhelp;;
-    -q|--quiet)     QUIET="TRUE";;
+    -h|--help)      printhelp;;
+    --verbose)      VERBOSE="TRUE";;
     -m|--mode)      MODE="${2:0:1}"; shift;;
+    -q|--quality)   QUALITY="$2"; shift;;
     -a|--abr)       ABR="$2"; shift;;
     -v|--vbr)       VBR="$2"; shift;;
     --)             shift; break;; # $@ is used below
@@ -81,11 +89,13 @@ done
 
 # define encoding options
 test "$MODE" && MODE="-m $MODE"
+test "$QUALITY" && QUALITY="-q $QUALITY"
 test "$ABR" && METHOD="--abr $ABR"
 test "$VBR" && METHOD="--vbr-new -V $VBR"
 
-verbose "   Mode: $MODE"
-verbose "   Method $METHOD"
+printsetting Mode "$MODE"
+printsetting Quality "$QUALITY"
+printsetting Method "$METHOD"
 
 # ---------------------------------------------------------
 # check dependencies
@@ -107,10 +117,6 @@ test "$FAIL" && fail "${FAIL%%\\n}"
 
 function transcode () {
 
-   function printinfo () {
-      test "$2" && verbose "   $1: $2"
-   }
-
    function parsetag () {
       echo "$1" | grep -i "$2=" | cut -d= -f2
    }
@@ -119,32 +125,33 @@ function transcode () {
    OGGINFO=$( ogginfo "$1" )
    test "$?" != "0" && fail "ogginfo failed!" "$OGGINFO"
  
-   # parse nominal bitrate
+   # use automatic ABR if neither ABR nor VBR is specified by the user;
+   # therefore parse the nominal bitrate and use it for this file
    if [ "$AUTOABR" ]; then
       BITRATE=$( echo "$OGGINFO" | grep "Nominal bitrate:" | cut -d' ' -f3 )
       test "$BITRATE" || fail "Unable to parse bitrate!"
       METHOD="--abr $BITRATE"
-      printinfo "Bitrate" "$BITRATE"
+      printsetting "Bitrate" "$BITRATE"
    fi
 
-   # parse tags
+   # parse id3 tags
    ARTIST=$( parsetag "$OGGINFO" "artist" )
-   printinfo Artist "$ARTIST"
+   printsetting Artist "$ARTIST"
    ALBUM=$( parsetag "$OGGINFO" "album" )
-   printinfo Album "$ALBUM"
+   printsetting Album "$ALBUM"
    TITLE=$( parsetag "$OGGINFO" "title" )
-   printinfo Title "$TITLE"
+   printsetting Title "$TITLE"
    TRACKNUMBER=$( parsetag "$OGGINFO" "tracknumber" )
-   printinfo "Track number" "$TRACKNUMBER"
+   printsetting "Track number" "$TRACKNUMBER"
    YEAR=$( parsetag "$OGGINFO" "date" )
-   printinfo Year "$YEAR"
+   printsetting Year "$YEAR"
    GENRE=$( parsetag "$OGGINFO" "genre" )
-   printinfo Genre "$GENRE"
+   printsetting Genre "$GENRE"
    COMMENT=$( parsetag "$OGGINFO" "comment" )
-   printinfo Comment "$COMMENT"
+   printsetting Comment "$COMMENT"
    
    # decode | encode
-   oggdec -Q -o- "$1" | lame -S $MODE $METHOD -q7 \
+   oggdec -Q -o- "$1" | lame -S $MODE $METHOD $QUALITY \
       --ta "$ARTIST" --tt "$TITLE" --tl "$ALBUM" --ty "$YEAR" --tn "$TRACKNUMBER" --tg "$GENRE" --tc "$COMMENT" \
 	  - "${1/.ogg/.mp3}"
 }
