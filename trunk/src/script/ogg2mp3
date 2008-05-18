@@ -1,7 +1,7 @@
 #!/bin/bash
 
 CMD=$( basename $0 )
-VERSION="0.1"
+VERSION="0.2"
 USAGE="Usage: $CMD [-h] [-m mode] [-a bitrate | -v quality ] inputfiles ..."
 
 # ---------------------------------------------------------
@@ -14,8 +14,10 @@ function printusage () {
 function printhelp () {
   cat << EOF
 ogg2mp3 version $VERSION 
-
 Bulk transcoding of OGG Vorbis to MP3. 
+
+(c) 2008 by Christoph Souris
+Released without warranty under the terms of the Artistic License.
 
 $USAGE
 
@@ -36,7 +38,7 @@ function print () {
    C=$1
    shift
    for MSG in "$@"; do
-      echo >&$C "$MSG"
+      echo -e >&$C "$MSG"
    done
 }
 # ---------------------------------------------------------
@@ -57,14 +59,14 @@ function fail () {
 # parse command line options
 # ---------------------------------------------------------
 
-OPTS=$( getopt -n $CMD -o h?qm:a:v: --long help,mode:,abr:,vbr: -- "$@" )
+OPTS=$( getopt -n $CMD -o hqm:a:v: --long help,mode:,abr:,vbr: -- "$@" )
 eval set -- $OPTS
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    -h|-\?|--help)  printhelp;;
+    -h|--help)  printhelp;;
     -q|--quiet)     QUIET="TRUE";;
-    -m|--mode)      MODE="$2"; shift;;
+    -m|--mode)      MODE="${2:0:1}"; shift;;
     -a|--abr)       ABR="$2"; shift;;
     -v|--vbr)       VBR="$2"; shift;;
     --)             shift; break;; # $@ is used below
@@ -77,13 +79,27 @@ done
 [[ "$1" ]] || printusage "No input files defined!"
 [[ "$ABR" || "$VBR" ]] || AUTOABR="TRUE"
 
-# set encoding method
-test "$MODE" && MODE="-m ${MODE:0:1}"
+# define encoding options
+test "$MODE" && MODE="-m $MODE"
 test "$ABR" && METHOD="--abr $ABR"
 test "$VBR" && METHOD="--vbr-new -V $VBR"
 
-verbose "mode option:    $MODE"
-verbose "method option:  $METHOD"
+verbose "   Mode: $MODE"
+verbose "   Method $METHOD"
+
+# ---------------------------------------------------------
+# check dependencies
+# ---------------------------------------------------------
+
+OGGINFO=$( which ogginfo )
+OGGDEC=$( which oggdec )
+LAME=$( which lame )
+
+MSG="Unable to locate '@' command line utility!"
+test "$OGGINFO" || FAIL="${MSG/@/ogginfo}\n"
+test "$OGGDEC" || FAIL="$FAIL${MSG/@/oggdec}\n"
+test "$LAME" || FAIL="$FAIL${MSG/@/lame}\n"
+test "$FAIL" && fail "${FAIL%%\\n}"
 
 # ---------------------------------------------------------
 # transcode 
@@ -91,8 +107,12 @@ verbose "method option:  $METHOD"
 
 function transcode () {
 
+   function printinfo () {
+      test "$2" && verbose "   $1: $2"
+   }
+
    function parsetag () {
-     echo "$1" | grep "$2=" | cut -d= -f2
+      echo "$1" | grep -i "$2=" | cut -d= -f2
    }
 
    # read ogginfo output
@@ -103,22 +123,29 @@ function transcode () {
    if [ "$AUTOABR" ]; then
       BITRATE=$( echo "$OGGINFO" | grep "Nominal bitrate:" | cut -d' ' -f3 )
       test "$BITRATE" || fail "Unable to parse bitrate!"
-      verbose "Bitrate: $BITRATE"
-      METHOD=--abr $BITRATE
+      METHOD="--abr $BITRATE"
+      printinfo "Bitrate" "$BITRATE"
    fi
 
    # parse tags
    ARTIST=$( parsetag "$OGGINFO" "artist" )
+   printinfo Artist "$ARTIST"
    ALBUM=$( parsetag "$OGGINFO" "album" )
+   printinfo Album "$ALBUM"
    TITLE=$( parsetag "$OGGINFO" "title" )
+   printinfo Title "$TITLE"
    TRACKNUMBER=$( parsetag "$OGGINFO" "tracknumber" )
+   printinfo "Track number" "$TRACKNUMBER"
    YEAR=$( parsetag "$OGGINFO" "date" )
+   printinfo Year "$YEAR"
    GENRE=$( parsetag "$OGGINFO" "genre" )
+   printinfo Genre "$GENRE"
    COMMENT=$( parsetag "$OGGINFO" "comment" )
+   printinfo Comment "$COMMENT"
    
    # decode | encode
    oggdec -Q -o- "$1" | lame -S $MODE $METHOD -q7 \
-      --ta "$ARTIST" --tt "$TITLE" --ta "$ALBUM" --ty "$YEAR" --tn "$TRACKNUMBER" --tg "$GENRE" -tc "$COMMENT" \
+      --ta "$ARTIST" --tt "$TITLE" --tl "$ALBUM" --ty "$YEAR" --tn "$TRACKNUMBER" --tg "$GENRE" --tc "$COMMENT" \
 	  - "${1/.ogg/.mp3}"
 }
 
