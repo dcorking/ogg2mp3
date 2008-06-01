@@ -1,0 +1,13 @@
+Source: ogg2mp3
+Section: sound
+Priority: optional
+Maintainer: Christoph Souris <christoph.souris@googlemail.com>
+Build-Depends: cdbs, debhelper (>= 5)
+Standards-Version: 3.7.2
+
+Package: ogg2mp3
+Architecture: all
+Depends: bash (>=3.2), ${shlibs:Depends}, ${misc:Depends}, lame, vorbis-tools
+Description: Covert files from OGG Vorbis to MP3
+ This is a small script to recursively convert your OGG Vorbis3 files and
+ directories to MP3.
