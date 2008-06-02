@@ -1,0 +1,37 @@
+.TH "ogg2mp3" "1" "0.2" "Christoph Souris" ""
+.SH "NAME"
+.LP 
+ogg2mp3 \- Convert Ogg Vorbis to MP3
+.SH "SYNOPSIS"
+.LP 
+ogg2mp3 [\fIoptions\fP] \fIinputfiles\fP ...
+.SH "DESCRIPTION"
+.LP 
+The \fBogg2mp3\fP command line utility converts Ogg Vorbis files into MP3 files using the \fBlame\fP MP3 encoder.
+.PP 
+Possible input files are single files or directoris where directories are processed recursively. Only valid Ogg Vorbis files are converted, other files are ignored. For each input file a new MP3 output file is written with the extension changed to ".mp3".
+.SH "OPTIONS"
+.LP 
+.TP 
+\-h, \-\-help
+Print help information and exit.
+.PP 
+\fBogg2mp3\fP supports ABR as well as VBR encoding through \fBlame\fP. If neither method is specified (see below) \fBogg2mp3\fP will use ABR using the average bit rate of the input file as target bitrate of the output MP3 file. Because each input file is evaluated seperately this is especially useful if the input files do vary in quality. Caveat: As Ogg Vorbis provides better overall quality than MP3 at the same bitrate this will result in lower quality output files.
+.TP 
+\-a, \-\-abr=BITRATE
+Use ABR encoding method with specified average rate. See the \fBlame\fP man page for details.
+.TP 
+\-v, \-\-vbr=QUALITY
+Use VBR encoding method with specified quality. Default is 4, use 0 for high or 9 for low quality. See the \fBlame\fP man page for details.
+.TP 
+\-m, \-\-mode=MODE
+Define stereo mode where MODE may be (j)oint, (s)imple, (f)orce, (d)dual\-mono, (m)ono. See the \fBlame\fP man page for details.
+.TP 
+\-q, \-\-quality=QUALITY
+Define \fBlame\fP algorithm quality. Default is 5, use 2 for high or 7 for reasonable low quality. See the \fBlame\fP man page for details.
+.SH "AUTHORS"
+.LP 
+Christoph Souris (christoph.souris at googlemail.com)
+.SH "SEE ALSO"
+.LP 
+\fBmp32ogg\fP(1), \fBoggdec\fP(1), \fBlame\fP(1)
