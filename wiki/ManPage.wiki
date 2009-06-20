@@ -1,6 +1,4 @@
 #labels Manual
-= Man Page = 
-
 NAME
        ogg2mp3 - Convert Ogg Vorbis to MP3
 
