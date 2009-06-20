@@ -1,6 +1,4 @@
-#summary One-sentence summary of this page.
 #labels Manual
-
 = Man Page = 
 
 NAME
@@ -58,4 +56,3 @@ AUTHORS
 
 SEE ALSO
        mp32ogg(1), oggdec(1), lame(1)
-
