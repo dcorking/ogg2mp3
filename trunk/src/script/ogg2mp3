@@ -1,7 +1,7 @@
 #!/bin/bash
 
 CMD=$( basename $0 )
-VERSION="0.2"
+VERSION="0.3"
 USAGE="Usage: $CMD [-h | OPTIONS ] inputfiles ..."
 
 # ---------------------------------------------------------
@@ -34,6 +34,7 @@ Options:
                         2 for high or 7 for reasonable low quality. See
                         LAME page for details.
       --verbose         Print verbose information.
+  -d, --delete          Delete transcoded input files.
 EOF
   exit 0
 }
@@ -47,7 +48,7 @@ function print () {
 }
 # ---------------------------------------------------------
 function verbose () {
-  [ "$QUIET" ] || print 1 "$@"
+  test "$VERBOSE" && print 1 "$@"
 }
 function printsetting () {
   test "$2" && verbose "$1: $2"
@@ -66,13 +67,14 @@ function fail () {
 # parse command line options
 # ---------------------------------------------------------
 
-OPTS=$( getopt -n $CMD -o hqm:a:v: --long help,verbose,mode:,quality:,abr:,vbr: -- "$@" )
+OPTS=$( getopt -n $CMD -o hdq:m:a:v: --long help,verbose,delete,progress,mode:,quality:,abr:,vbr: -- "$@" )
 eval set -- $OPTS
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -h|--help)      printhelp;;
     --verbose)      VERBOSE="TRUE";;
+    -d|--delete)    DELETE="TRUE";;
     -m|--mode)      MODE="${2:0:1}"; shift;;
     -q|--quality)   QUALITY="$2"; shift;;
     -a|--abr)       ABR="$2"; shift;;
@@ -92,6 +94,7 @@ test "$MODE" && MODE="-m $MODE"
 test "$QUALITY" && QUALITY="-q $QUALITY"
 test "$ABR" && METHOD="--abr $ABR"
 test "$VBR" && METHOD="--vbr-new -V $VBR"
+test "$VERBOSE" || DECODESILENT="-Q" ENCODESILENT="-S"
 
 printsetting Mode "$MODE"
 printsetting Quality "$QUALITY"
@@ -151,7 +154,7 @@ function transcode () {
    printsetting Comment "$COMMENT"
    
    # decode | encode
-   oggdec -Q -o- "$1" | lame -S $MODE $METHOD $QUALITY \
+   oggdec $DECODESILENT -o- "$1" | lame $ENCODESILENT $MODE $METHOD $QUALITY \
       --ta "$ARTIST" --tt "$TITLE" --tl "$ALBUM" --ty "$YEAR" --tn "$TRACKNUMBER" --tg "$GENRE" --tc "$COMMENT" \
 	  - "${1/.ogg/.mp3}"
 }
@@ -183,7 +186,14 @@ function processfile () {
    else
       verbose "Processing file '$FILE' ..."
       if isogg "$FILE"; then 
-         transcode "$FILE"
+      	 if transcode "$FILE"; then
+      	 	if [ "$DELETE" ]; then
+      	 	   verbose "Done. Removing ...";
+               rm "$FILE"
+            else
+               verbose "Done."
+            fi   
+         fi
       else
          warn "Not an Ogg Vorbis file: '$FILE'"
       fi
