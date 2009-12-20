@@ -1,7 +1,7 @@
 #!/bin/bash
 
 CMD=$( basename $0 )
-VERSION="0.3"
+VERSION="0.3.1"
 USAGE="Usage: $CMD [-h | OPTIONS ] inputfiles ..."
 
 # ---------------------------------------------------------
@@ -125,7 +125,7 @@ function transcode () {
    }
 
    # read ogginfo output
-   OGGINFO=$( ogginfo "$1" )
+   OGGINFO=$( LANG=C ogginfo "$1" )
    test "$?" != "0" && fail "ogginfo failed!" "$OGGINFO"
  
    # use automatic ABR if neither ABR nor VBR is specified by the user;
