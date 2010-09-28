@@ -1,8 +1,15 @@
+ogg2mp3 (0.4-1) unstable; urgency=low
+
+  * Basic status/progress information are printed by default
+  * Added --quiet option to suppress default status information
+
+ -- Christoph Souris <christoph.souris@googlemail.com>  Tue, 28 Sep 2010 21:01:00 +0200
+
 ogg2mp3 (0.3.2-1) unstable; urgency=low
 
   * Fixed shell quote bug (issue 5).
 
- -- Christoph Souris <christoph@googlemail.com>  Sun, 20 Dec 2009 22:23:53 +0200
+ -- Christoph Souris <christoph.souris@googlemail.com>  Sun, 26 Sep 2010 18:58:21 +0200
 
 ogg2mp3 (0.3.1-1) unstable; urgency=low
 

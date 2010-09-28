@@ -1,7 +1,7 @@
 #!/bin/bash
 
 CMD=$( basename $0 )
-VERSION="0.3.1"
+VERSION="0.4"
 USAGE="Usage: $CMD [-h | OPTIONS ] inputfiles ..."
 
 # ---------------------------------------------------------
@@ -34,6 +34,7 @@ Options:
                         2 for high or 7 for reasonable low quality. See
                         LAME page for details.
       --verbose         Print verbose information.
+      --quiet           Suppress all status information.
   -d, --delete          Delete transcoded input files.
 EOF
   exit 0
@@ -47,33 +48,53 @@ function print () {
    done
 }
 # ---------------------------------------------------------
+function info () {
+  test "$QUIET" || print 1 "$@"
+}
 function verbose () {
   test "$VERBOSE" && print 1 "$@"
 }
 function printsetting () {
   test "$2" && verbose "$1: $2"
 }
-# ---------------------------------------------------------
 function warn () {
   print 2 "$@"
 }
-# ---------------------------------------------------------
 function fail () {
   print 2 "$@"
   exit 1
+}
+# ---------------------------------------------------------
+function printMode () {
+  case "${MODE:3:3}" in
+    j|J) echo "Joint Stereo";;
+    s|S) echo "Simple Stereo";;
+    f|F) echo "Force Stereo";;
+    d|D) echo "Dual Mono";;
+    m|M) echo "Mono";;
+    *) echo "Undefined";;
+  esac
+}
+function printMethod () {
+  case "${METHOD:2:3}" in
+     abr) echo "ABR, ${METHOD:6} kb/s";;
+     vbr) echo "VBR, Quality ${METHOD:13}";;
+     *) echo "Undefined";;
+  esac 
 }
 
 # ---------------------------------------------------------
 # parse command line options
 # ---------------------------------------------------------
 
-OPTS=$( getopt -n $CMD -o hdq:m:a:v: --long help,verbose,delete,progress,mode:,quality:,abr:,vbr: -- "$@" )
-eval set -- $OPTS
+OPTS=$( getopt -n $CMD -o hdq:m:a:v: --long help,verbose,quiet,delete,progress,mode:,quality:,abr:,vbr: -- "$@" )
+eval set -- "$OPTS"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -h|--help)      printhelp;;
     --verbose)      VERBOSE="TRUE";;
+    --quiet)        QUIET="TRUE";;
     -d|--delete)    DELETE="TRUE";;
     -m|--mode)      MODE="${2:0:1}"; shift;;
     -q|--quality)   QUALITY="$2"; shift;;
@@ -96,9 +117,9 @@ test "$ABR" && METHOD="--abr $ABR"
 test "$VBR" && METHOD="--vbr-new -V $VBR"
 test "$VERBOSE" || DECODESILENT="-Q" ENCODESILENT="-S"
 
-printsetting Mode "$MODE"
-printsetting Quality "$QUALITY"
-printsetting Method "$METHOD"
+printsetting "Encoding mode" "$( printMode '$MODE' )"
+printsetting "Encoding quality" "${QUALITY:3:3}"
+printsetting "Encoding method" "$( printMethod '$METHOD' )"
 
 # ---------------------------------------------------------
 # check dependencies
@@ -127,12 +148,14 @@ function transcode () {
    # read ogginfo output
    OGGINFO=$( LANG=C ogginfo "$1" )
    test "$?" != "0" && fail "ogginfo failed!" "$OGGINFO"
+
+   # determine nominal bitrate of source file
+   BITRATE=$( echo "$OGGINFO" | grep "Nominal bitrate:" | cut -d' ' -f3 )
+   test "$BITRATE" || fail "Unable to parse bitrate!"
  
    # use automatic ABR if neither ABR nor VBR is specified by the user;
    # therefore parse the nominal bitrate and use it for this file
    if [ "$AUTOABR" ]; then
-      BITRATE=$( echo "$OGGINFO" | grep "Nominal bitrate:" | cut -d' ' -f3 )
-      test "$BITRATE" || fail "Unable to parse bitrate!"
       METHOD="--abr $BITRATE"
       printsetting "Bitrate" "$BITRATE"
    fi
@@ -152,7 +175,7 @@ function transcode () {
    printsetting Genre "$GENRE"
    COMMENT=$( parsetag "$OGGINFO" "comment" )
    printsetting Comment "$COMMENT"
-   
+  
    # decode | encode
    oggdec $DECODESILENT -o- "$1" | lame $ENCODESILENT $MODE $METHOD $QUALITY \
       --ta "$ARTIST" --tt "$TITLE" --tl "$ALBUM" --ty "$YEAR" --tn "$TRACKNUMBER" --tg "$GENRE" --tc "$COMMENT" \
@@ -176,15 +199,14 @@ function processfile () {
    
    # if directory, process content
    if [ -d "$FILE" ]; then
-      verbose "Processing directory '$FILE' ..."
+      info "Processing directory '$FILE' ..."
       for SUBFILE in "$FILE"/*; do
-      
          processfile "$SUBFILE"
       done
 
    # else: transcode file if ogg
    else
-      verbose "Processing file '$FILE' ..."
+      info "Processing file '$FILE' ..."
       if isogg "$FILE"; then 
       	 if transcode "$FILE"; then
       	 	if [ "$DELETE" ]; then
@@ -207,5 +229,4 @@ function processfile () {
 for FILE in "$@"; do
    processfile "$FILE"
 done
-
 
