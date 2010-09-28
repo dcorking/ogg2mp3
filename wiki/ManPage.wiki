@@ -21,9 +21,9 @@ OPTIONS
        ogg2mp3  supports  ABR as well as VBR encoding through lame. If neither
        method is specified (see below) ogg2mp3 will use ABR using the  average
        bit  rate  of  the input file as target bitrate of the output MP3 file.
-       Because each input file is evaluated seperately this is especially use‐
-       ful  if  the input files do vary in quality. Caveat: As Ogg Vorbis pro‐
-       vides better overall quality than MP3 at the  same  bitrate  this  will
+       Because each input file is evaluated separately this is especially use
+       ful if  the input files do vary in quality. Caveat: As Ogg Vorbis 
+       provides better overall quality than MP3 at the  same  bitrate  this  will
        result in lower quality output files.
 
        -a, --abr=BITRATE
@@ -45,6 +45,9 @@ OPTIONS
 
        -d, --delete
               Delete input files after transcoding.
+
+       --quiet
+              Suppress all status information.
 
        --verbose
               Print verbose information.
